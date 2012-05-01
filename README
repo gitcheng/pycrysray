@@ -1,0 +1,20 @@
+=== Project pycrysray: ===
+
+Optical photon ray tracing program for crystal studies. 
+
+There are two main classes: Photon and Plane.
+
+Crystal geometry is defined by a set of convex polygon surfaces (Planes).
+
+Each Plane is defined by a list of corners. Each corner is an numpy.array
+of three elements. Corners in the list must be in order (clockwise or counter-
+clockwise). The angle at each corner must be less than 180 degrees (convex). 
+One can define properties of each surface such as reflectivity.
+
+Photon has its position and direction, as well as other properties, such as
+mean free path.
+
+A Photon travels inside the crystal and reflects at the surfaces, until it
+is killed either at the surface (reflectivity) or after certain path length
+(mean free path).
+

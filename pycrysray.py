@@ -3,6 +3,8 @@ import sys
 arr = np.array
 sqrt = np.sqrt
 exp = np.exp
+sin = np.sin
+cos = np.cos
 
 ## Functions ===========================================
 def norm_vect(v):
@@ -29,8 +31,29 @@ def sine_angle(v1,v2,vtx=None):
     n= np.cross(a,b) / ( vect_norm(a) * vect_norm(b) )
     return vect_norm(n)
 
+def rotate_vector(v, zhat):
+    '''
+    Rotate the vector v so that the z axis of its coordinate points to zhat.
+    '''
+    # Get the angles of zhat
+    abszhat = vect_norm(zhat)
+    if ( abszhat == 0 ):
+        raise TypeError('zhat is zero!!')
+    ctheta = zhat[2]/abszhat
+    stheta = sqrt(1-ctheta**2)
+    cphi, sphi= 1, 0
+    if ( stheta > 1e-6 ):
+        cphi = zhat[0]/ (abszhat * stheta)
+        sphi = zhat[1]/ (abszhat * stheta)
+    # rotate matrix, about y-axis, by angle theta
+    Ry = np.matrix([ [ctheta, 0, stheta], [0,1,0], [-stheta, 0, ctheta] ] )
+    # about z-axis, by angle phi
+    Rz = np.matrix([ [cphi,-sphi,0],[sphi,cphi,0],[0,0,1] ] )
+    # Rotate v
+    return arr(Rz*Ry* v.reshape(3,1)).reshape(3,)
+
 ## Geometries ===================================================
-def rect_prism(center,dim,reflectivity=None):
+def rect_prism(center,dim, random_reflect, diffuse_reflect, diffuse_sigma ):
     '''
     Return a rectangular prism whose edges are parallel to the axes.
     *center* is the coordinate of the center of gravity
@@ -49,14 +72,18 @@ def rect_prism(center,dim,reflectivity=None):
     cs5 = arr([ cns[2], cns[3], cns[7], cns[6] ])
     cs6 = arr([ cns[1], cns[3], cns[7], cns[5] ])
 
-    ref=reflectivity
-    plist = [Plane(cs1,ref),Plane(cs2,ref),Plane(cs3,ref),Plane(cs4,ref),Plane(cs5,ref),Plane(cs6,ref)]
+    ref= {'random_reflect':random_reflect, 'diffuse_reflect':diffuse_reflect, 'diffuse_sigma':diffuse_sigma }
+    plist = [Plane(cs1,**ref),Plane(cs2,**ref),Plane(cs3,**ref),Plane(cs4,**ref),Plane(cs5,**ref),Plane(cs6,**ref)]
     return plist
 
 ###################################################################
 class Photon:
     '''
     A class describing a photon
+    x : Current position (array of three floats)
+    p : Current direction (array of three floats, norm=1
+    wavelength : wavelength
+    mfp : Mean free path
     '''
     def __init__(self, x=None, dir=None, wavelength=None, mfp=1e9):
         zero3= np.zeros(3)
@@ -92,28 +119,74 @@ class Photon:
         '''
         return self.x + d* self.dir
 
-    def reflect(self, plane=None, normal=None, reflectivity=None):
+    def reflect(self, plane=None, normal=None, random_reflect=0, diffuse_reflect=0, diffuse_sigma=0):
         '''
         Change direction as it reflects at a surface and add this position to 
         the list of vertices. If a plane is given, normal and reflectivity
         will be taken from the plane. Arguments will be ignored.
+
+        random_reflect: probability of random reflection
+        diffuse_reflect: probability of diffuse reflection
+        diffuse_sigma: width (sigma) in degrees of diffuse reflection
         '''
         if ( plane==None and normal==None ):
             raise TypeError('Need either plane or normal')
 
+        rndrf= random_reflect
+        difrf= diffuse_reflect
+        difsig= diffuse_sigma * np.pi/180.0
         if ( plane!= None):
             normal= plane.normal
-            reflectivity= plane.reflectivity
+            rndrf= plane.random_reflect
+            difrf= plane.diffuse_reflect
+            difsig= plane.diffuse_sigma * np.pi/180.0
+
+        normal = norm_vect(normal)
+
+        # normal must point inward, i.e., if the photon direction is in the
+        # same hemisphere as the normal, flip normal
+        if ( normal.dot( self.dir ) > 0 ):
+            normal = -normal
 
         self.vertices.append( self.x )
+        self.dir = norm_vect(self.dir)
 
-        if ( reflectivity!=None ):
-            if ( np.random.uniform() >= reflectivity ):
-                self.alive = False
+        # Survive or not
+        rn = np.random.random_sample()
+        if ( rn >= rndrf+difrf ): # not reflected
+            self.alive = False
 
-        if (self.alive):
-            self.dir = norm_vect(self.dir)
-            self.dir = self.dir - 2*self.dir.dot(normal) * normal / normal.dot(normal)
+        elif ( rn >= difrf ):   # random (not diffuse)
+            xphi = np.random.uniform(-np.pi, np.pi)
+            xcth = np.random.uniform(0,0.999)   # cos theta
+            xsth = sqrt(1-xcth**2)
+            # random vector in upper hemisphere
+            vrand = arr([xsth*cos(xphi), xsth*sin(xphi), xcth])
+            # rotate the vector so that its z axis points to normal
+            self.dir = rotate_vector( vrand, normal)
+
+        else: # diffuse
+            # specular reflection
+            spec_dir = self.dir - 2*self.dir.dot(normal) * normal
+            
+            while ( True ):
+                # random phi
+                xphi = np.random.uniform(-np.pi, np.pi)
+                # Gaussian theta
+                xtheta = np.random.randn() * difsig
+                xsth= sin(xtheta)
+                xcth= cos(xtheta)
+                # random vector in upper hemisphere, around z-axis
+                vrand = arr([xsth*cos(xphi), xsth*sin(xphi), xcth])
+                # rotate the vector so that its z axis points to specular reflection
+                vrand = rotate_vector( vrand, spec_dir)
+                # If vrand is less than 90 degrees of normal, ok, break
+                if ( vrand.dot(normal) > 1e-6 ):
+                    self.dir = vrand
+                    break
+            pass
+        
+        if ( self.alive ):
             self.n_reflects += 1
             # to stay away from this plane. FIXME!! This will make the edges leak.
             self.advance(1e-6)
@@ -183,19 +256,34 @@ class Photon:
 class Plane:
     '''
     A class describing a flat plane in 3-dim space, defined by an array of 
-    corners (3-vector). Only convex polygons are allowed
+    corners (3-vector). Only convex polygons are allowed.
+    
+    corners : an array of space points (arrays of three floats)
+    random_reflect : probability of random reflection (angle uniform over (-90,90) degrees.)
+    diffuse_reflect : probability of diffuse reflection (angle in Gaussian distribution)
+    
+    diffuse_sigma : the sigma of the Gaussian.
     '''
-    def __init__(self, corners, reflectivity= 1.0):
+    def __init__(self, corners, random_reflect=0.10, diffuse_reflect=0.90, diffuse_sigma=22 ):
+
         shape = corners.shape
         if ( shape[0]<3 or shape[1]!=3 ): # corners is a an array of shape (n,3), n>=3
             raise TypeError('corners in %s(corners) must be of shape (n,3) with n>=3. But it is (%d,%d)' % ( self.__class__.__name__, shape[0], shape[1])) 
         self.corners = corners
-        self.reflectivity = reflectivity
         # Use the two edges at corners[0] to define its normal vector
         self.normal= norm_vect( np.cross(corners[-1]-corners[0], corners[1]-corners[0]) )
         # Center of gravity
         self.cog = np.average( corners, axis=0 )
         self.tolerance= 1e-6
+
+        # Reflectivity
+        #  probability of random reflection (angle uniform over (-90,90) degrees.)
+        self.random_reflect = random_reflect
+        #  probability of diffuse reflection (angle in Gaussian distribution
+        #   within sigma = diffuse_sigma 
+        self.diffuse_reflect = diffuse_reflect
+        self.diffuse_sigma = diffuse_sigma
+
         # base vectors
         self.u = norm_vect( corners[0]- self.cog )
         self.v = np.cross( self.normal, self.u )

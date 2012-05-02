@@ -73,7 +73,8 @@ def main():
     for orig,px,py,pz in zip(origs,xdir,ydir,zdir):
         ph = Photon(x=orig, dir=arr([px,py,pz]), mfp= float(opts.mfp) )
         # Propagate
-        ph.propagate(plist, verbose=opts.verbose)
+        while ( ph.alive ):
+            ph.propagate(plist, verbose=opts.verbose)
         #print ph.vertices
         print 'pathlength = ', ph.pathlength
         print 'n_reflects = ', ph.n_reflects

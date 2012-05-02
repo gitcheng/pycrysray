@@ -105,7 +105,7 @@ class Photon:
         '''
         Advance a distance d.
         '''
-        prob = exp( -d/self.mfp )
+        prob = exp( -abs(d)/self.mfp )
         if ( np.random.uniform() > prob ):
             self.alive = False
 
@@ -212,45 +212,43 @@ class Photon:
                 imin = i
         return imin, dmin
 
-    def propagate(self, plist, sens_boxes=None, verbose=False):
+    def propagate(self, plist, black_regions=[], verbose=False):
         '''
         Propagating this photon (A recursive function).
-        Return True if it hits a sensitive box
+        Return the plane this photon dies on.
         '''
         if ( verbose ):
             print 'propagate, from point ', self.x, 'at direction', self.dir
         if ( not self.alive ):
             if ( verbose ): print 'Dead on arrival'
-            return False
+            return None
         if ( abs(self.x[0])>self.mother_box[0] or
              abs(self.x[1])>self.mother_box[1] or
              abs(self.x[2])>self.mother_box[2] ):
             self.alive=False
-            return False
+            return None
 
         # find the next plane
         imin,dmin= self.nearest_plane(plist)
         if ( imin == None ):  # did not find any plane
             self.alive = False
             if ( verbose ): print 'Cannot find next plane'
-            return False
+            return None
         if ( verbose ):
             print 'path to next plane is', dmin
             plist[imin].print_prop()
         # advance photon
         self.advance(dmin)
-        if ( not self.alive ): return False
-        # check if it hits sensitive boxes
-        if ( sens_boxes != None ):
-            for box in sens_boxes:
-                
-                return True
+        if ( not self.alive ): return None
+        # check if it hits black boxes
+        for box in black_regions:
+            if ( box.contain(self.x ) ):
+                self.alive = False
+                return box
 
         # reflect on this plane
         self.reflect(plist[imin])
-        if ( not self.alive ): return False
-        # Recursive
-        return self.propagate(plist, sens_boxes, verbose)
+        return plist[imin]
 
 ###################################################################
 class Plane:
@@ -264,7 +262,7 @@ class Plane:
     
     diffuse_sigma : the sigma of the Gaussian.
     '''
-    def __init__(self, corners, random_reflect=0.10, diffuse_reflect=0.90, diffuse_sigma=22 ):
+    def __init__(self, corners, random_reflect=0.10, diffuse_reflect=0.90, diffuse_sigma=22, sensitive=False ):
 
         shape = corners.shape
         if ( shape[0]<3 or shape[1]!=3 ): # corners is a an array of shape (n,3), n>=3
@@ -275,6 +273,8 @@ class Plane:
         # Center of gravity
         self.cog = np.average( corners, axis=0 )
         self.tolerance= 1e-6
+        # Sensitive surface or not
+        self.sensitive= sensitive
 
         # Reflectivity
         #  probability of random reflection (angle uniform over (-90,90) degrees.)
@@ -327,15 +327,20 @@ class Plane:
         for c in self.corners:
             print c
         print '  normal =', self.normal
-        print '  reflectivity =', self.reflectivity
+        print '  random_reflect =', self.random_reflect
+        print '  diffuse_reflect =', self.diffuse_reflect
+        print '  diffuse_sigma =', self.diffuse_sigma
 
     def on_plane(self, x):
+        '''
+        True if x is on the 2-D plane (infinite)
+        '''
         if ( abs( (x-self.corners[0]).dot( self.normal ) ) > self.tolerance ):
             return False
         else:
             return True
     
-    def in_polygon(self, x):
+    def contain(self, x):
         '''
         Return True if the position x is inside the polygon
         '''

@@ -13,7 +13,7 @@ arr = np.array
 def main():
 
     from optparse import OptionParser
-    parser = OptionParser()
+    parser = OptionParser(__doc__)
     parser.add_option('--geo', dest='geo', default='rect',\
                           help='Geometry option: "rect", "trap"')
     parser.add_option('--seed', dest='seed', default=31416, help='Random seed')

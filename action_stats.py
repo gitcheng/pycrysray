@@ -11,7 +11,7 @@ def main():
     from optparse import OptionParser
     parser = OptionParser()
     parser.add_option('--seed', dest='seed', default=12345, help='Random seed')
-    parser.add_option('--refidx', dest='refidx', default='',\
+    parser.add_option('--refidx', dest='refidx', default='0.0:0.99:0.0',\
                           help='Reflectivity properties: three parameters are needed, random_reflect_probability:diffuse_reflect_probability:diffuse_sigma(degree)')
     parser.add_option('--mfp', dest='mfp', default=1000, help='Mean free path')
     parser.add_option('--verbose', dest='verbose', action='store_true', default=False)

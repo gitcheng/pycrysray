@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>Pycrysray by gitcheng</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/pygment_trac.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>Pycrysray</h1>
+        <p>Internal ray trace for crystals</p>
+
+        <p class="view"><a href="https://github.com/gitcheng/pycrysray">View the Project on GitHub <small>gitcheng/pycrysray</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/gitcheng/pycrysray/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/gitcheng/pycrysray/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/gitcheng/pycrysray">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <p>=== Project pycrysray: ===</p>
+
+<p>Optical photon ray tracing program for crystal studies. </p>
+
+<p>There are two main classes: Photon and Plane.</p>
+
+<p>Crystal geometry is defined by a set of convex polygon surfaces (Planes).</p>
+
+<p>Each Plane is defined by a list of corners. Each corner is an numpy.array
+of three elements. Corners in the list must be in order (clockwise or counter-
+clockwise). The angle at each corner must be less than 180 degrees (convex). 
+One can define properties of each surface such as reflectivity.</p>
+
+<p>Photon has its position and direction, as well as other properties, such as
+mean free path.</p>
+
+<p>A Photon travels inside the crystal and reflects at the surfaces, until it
+is killed either at the surface (reflectivity) or after certain path length
+(mean free path).</p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/gitcheng">gitcheng</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>

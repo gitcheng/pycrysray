@@ -226,7 +226,7 @@ class Photon:
         '''
         return self.x + d* self.dir
 
-    def reflect(self, plane, sensors=None):
+    def reflect(self, plane, sensors):
         '''
         Change direction as it reflects at a surface and add this position to 
         the list of vertices.
@@ -547,10 +547,16 @@ class Crystal:
        crystal_1= Crystal([p1, p2, p3, p4, p5, p6], [s1, s2])
         pi and si are instances of Plane
     '''
-    def __init__(self, planes, sensors=None):
-        self.planes= planes
-        self.sensors= sensors
-        self.allplanes= list(planes)+list(sensors) if sensors is not None else planes
+    def __init__(self, name, planes):
+        self.name= name
+        self.allplanes= planes
+        self.planes= []
+        self.sensors= []
+        for p in planes:
+            if p.sensitive:
+                self.sensors.append(p)
+            else:
+                self.planes.append(p)
         # Center of gravity
         self.cog= np.array( [ p.cog for p in self.planes ] ).sum(axis=0)
         self.__set_plane_normal()

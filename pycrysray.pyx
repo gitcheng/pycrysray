@@ -427,7 +427,7 @@ class Photon:
     wavelength : wavelength
     mfp : Mean free path
     '''
-    def __init__(self, x, dir, wavelength=None, mfp=1e9):
+    def __init__(self, x, dir, wavelength=None, mfp=1e9, trackvtx=False):
         self.x = np.array(x, dtype='Float64')
         self.dir = unit_vect(np.array(dir))
         self.startx = x
@@ -438,6 +438,7 @@ class Photon:
         self.pathlength = 0.0
         self.n_reflects = 0
         self.vertices= [x]
+        self.trackvtx= trackvtx
         self.mother_box= np.array([100.,100.,100.])
         self.mfp= mfp
         self.deposit_at= None   # At which sensor
@@ -485,7 +486,8 @@ class Photon:
 
         self.lastplane = theplane
         normal= theplane.normal
-        self.vertices.append( self.x )
+        if self.trackvtx:
+            self.vertices.append( self.x )
         self.dir = unit_vect(self.dir)
         costh= normal.dot(self.dir)
 
@@ -663,3 +665,17 @@ def run_exp(crystal, zpoints, dz, dr, nperz, mfp=1000, verbose=False):
     if verbose:
         print 
     return np.array(effs), np.array(errs)
+
+
+def draw_one_crystal(ax, crystal, photon=None, elev=20, azim=40, xlim=(-3,3), ylim=(-3,3)):
+    '''
+    Draw one crystal in 3D
+    '''
+    ax.view_init(elev= elev, azim=azim)
+    crystal.draw(ax, photon)
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('z')
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+

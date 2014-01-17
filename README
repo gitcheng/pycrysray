@@ -19,3 +19,9 @@ is killed either at the surface (reflectivity) or after certain path length
 (mean free path).
 
  
+
+To build:
+
+python setup.py build_ext --inplace
+
+to build it in place. Python scripts can be run in the same directory.

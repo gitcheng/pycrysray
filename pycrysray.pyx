@@ -10,6 +10,7 @@ from math import sin as msin
 from math import cos as mcos
 from math import sqrt as msqrt
 from math import exp as mexp
+from math import radians as mradians
 npsqrt= np.sqrt
 npexp= np.exp
 npsin= np.sin
@@ -21,20 +22,21 @@ ctypedef np.float64_t DTYPE_t
 ## Functions ===========================================
 @cython.boundscheck(False)
 @cython.wraparound(False)
-cdef DTYPE_t vect_norm(DTYPE_t[::1] vec):
+def vect_norm(DTYPE_t[::1] vec):
     '''
     Return the norm of a vector |v|
     '''
-    cdef DTYPE_t norm= 0.0
-    for v in vec:
-        norm+= v*v
-    return msqrt(norm)
+    return msqrt( vec[0]*vec[0]+vec[1]*vec[1]+vec[2]*vec[2])
+    #cdef DTYPE_t norm= 0.0
+    #for v in vec:
+    #    norm+= v*v
+    #return msqrt(norm)
 
 def unit_vect(np.ndarray[DTYPE_t, ndim=1] v):
     '''
     Return the unit vector of direction v.
     '''
-    return v/vect_norm(v)
+    return v*(1.0/vect_norm(v))
 
 def distance(np.ndarray[DTYPE_t, ndim=1] x1, np.ndarray[DTYPE_t, ndim=1] x2, int n=3):
     '''
@@ -56,6 +58,7 @@ def sine_angle(np.ndarray[DTYPE_t, ndim=1] v1, np.ndarray[DTYPE_t, ndim=1] v2, n
     cdef np.ndarray[DTYPE_t, ndim=1] n= np.cross(a,b) / ( vect_norm(a) * vect_norm(b) )
     return vect_norm(n)
 
+@cython.boundscheck(False)
 def rotate_vector(np.ndarray[DTYPE_t, ndim=1] v, np.ndarray[DTYPE_t, ndim=1] zhat):
     '''
     Rotate the vector v so that the z axis of its coordinate points to zhat.
@@ -72,9 +75,10 @@ def rotate_vector(np.ndarray[DTYPE_t, ndim=1] v, np.ndarray[DTYPE_t, ndim=1] zha
         cphi = zhat[0]/ (abszhat * stheta)
         sphi = zhat[1]/ (abszhat * stheta)
     # rotate matrix, about y-axis, by angle theta
-    Ry = np.matrix([ [ctheta, 0, stheta], [0,1,0], [-stheta, 0, ctheta] ] )
+    cdef np.ndarray[DTYPE_t, ndim=2] Ry, Rz
+    Ry = np.matrix([ [ctheta, 0.0, stheta], [0.0,1.0,0.0], [-stheta, 0.0, ctheta] ] )
     # about z-axis, by angle phi
-    Rz = np.matrix([ [cphi,-sphi,0],[sphi,cphi,0],[0,0,1] ] )
+    Rz = np.matrix([ [cphi,-sphi,0.0],[sphi,cphi,0.0],[0.0,0.0,1.0] ] )
     # Rotate v
     return np.array(Rz*Ry* v.reshape(3,1)).reshape(3,)
 
@@ -197,6 +201,7 @@ def transmittance(DTYPE_t n1, DTYPE_t n2, DTYPE_t cos_theta_i):
 def generate_p6(np.ndarray[DTYPE_t, ndim=1] center, DTYPE_t dz, DTYPE_t dr):
     '''
     Generate random directions and random positions
+    Return two arrays (3-vector), first the position; second the direction.
     *center* is the center of generated positions
     *dz* is the range in z (-dz, +dz)
     *dr* is the range in x-y plane (a circle with radius dr)
@@ -215,6 +220,20 @@ def generate_p6(np.ndarray[DTYPE_t, ndim=1] center, DTYPE_t dz, DTYPE_t dr):
     ydir= sth*msin(phi)
     return np.array([x,y,z]), np.array([xdir,ydir,cth])
 
+# Return a random direction in the same hemisphere as normal vector.
+def random_direction(normal):
+    '''
+    Return a random direction in the same hemisphere as normal vector.
+    random_direction(normal)
+    *normal*: 3-vector (normalized) of the normal
+    '''
+    xphi = nprnd.uniform(-np.pi, np.pi)
+    xcth = nprnd.uniform(0,0.999)   # cos theta
+    xsth = msqrt(1-xcth**2)
+    # random vector in upper hemisphere
+    vrand = np.array([xsth*mcos(xphi), xsth*msin(xphi), xcth])
+    # rotate the vector so that its z axis points to normal
+    return rotate_vector( vrand, normal)
 
 ###################################################################
 class Plane:
@@ -224,17 +243,19 @@ class Plane:
     
     *corners* : an array of space points (arrays of three floats). So the shape
                 of corners must be (n,3),  n>=3
-    *sigdif_crys* : the sigma of diffused reflection on crystal surface (when
-                    not transmitted) in degrees
-    *sigdif_wrap*: the sigma of diffused reflection on wrapper (when transmitted)
+    *sigdif_crys* : the sigma (degrees) of diffused reflection on crystal surface
+    *pdif_crys*: probability of diffused reflection on crystal surface
+    *prand_crys*: probability of random reflection on crystal surface
+    *sigdif_wrap*: the sigma (degrees) of diffused reflection on wrapper
     *pdif_wrap*: probability of diffused reflection on wrapper
     *prand_wrap*: probability of random reflection on wrapper
     *idx_refract_in* : index of refraction on this side of the plane
     *idx_refract_out* : index of refraction on the other side of the plane
     *sensitive* : Is this plane a sensitive object (photo sensor) or not.
     '''
-    def __init__(self, corners, sigdif_crys, sigdif_wrap=20, pdif_wrap= 0.89,
-                 prand_wrap= 0.10, idx_refract_in=1, idx_refract_out=1,
+    def __init__(self, corners, sigdif_crys=0.0, pdif_crys=1.0, prand_crys=0.0,
+                 sigdif_wrap=0.0, pdif_wrap=1.0, prand_wrap=0.0,
+                 idx_refract_in=1, idx_refract_out=1,
                  sensitive=False, wrapped=True ):
 
         self.corners = np.array(corners)
@@ -252,6 +273,8 @@ class Plane:
         self.sensitive= sensitive
         # Reflectivity
         self.sigdif_crys= sigdif_crys
+        self.pdif_crys = pdif_crys
+        self.prand_crys = prand_crys
         self.sigdif_wrap= sigdif_wrap
         self.pdif_wrap= pdif_wrap
         self.prand_wrap= prand_wrap
@@ -320,6 +343,8 @@ class Plane:
             print c
         print '  normal =', self.normal
         print '  sigdif_crys =', self.sigdif_crys
+        print '  pdif_crys =', self.pdif_crys
+        print '  prand_crys =', self.prand_crys
         print '  sigdif_wrap =', self.sigdif_wrap
         print '  pdif_wrap =', self.pdif_wrap
         print '  prand_wrap =', self.prand_wrap
@@ -359,9 +384,10 @@ class Plane:
 ###################################################################
 class Crystal:
     '''
-    Class crystal. Defined by a list of Planes, and a list of sensors
+    Class crystal. Defined by a list of Planes, both sensitive and
+    insensitive Planes in the same list.
     Ex.
-       crystal_1= Crystal([p1, p2, p3, p4, p5, p6], [s1, s2])
+       crystal_1= Crystal('theName', [p1, p2, p3, p4, p5, p6, s1, s2])
         pi and si are instances of Plane
     '''
     def __init__(self, name, planes):
@@ -437,17 +463,19 @@ class Photon:
         self.detected = False
         self.pathlength = 0.0
         self.n_reflects = 0
+        self.incident_costh= -1.0
         self.vertices= [x]
         self.trackvtx= trackvtx
         self.mother_box= np.array([100.,100.,100.])
         self.mfp= mfp
         self.deposit_at= None   # At which sensor
-        self.status='alive'
-        self.rangeout= 'rangeout'
-        self.absorbed= 'absorbed'
-        self.transmitted= 'transmitted'
-        self.outofvolume= 'outofvolume'
-        self.noplane= 'noplane'
+        self.status_names= ['alive','rangeout','absorbed','transmitted','outofvolume','noplane']
+        self.status= 0
+        self.rangeout= 1
+        self.absorbed= 2
+        self.transmitted= 3
+        self.outofvolume= 4
+        self.noplane= 5
         self.lastplane= None
 
     def advance(self, d):
@@ -469,6 +497,136 @@ class Photon:
         '''
         return self.x + d* self.dir
 
+    def snell_refraction(self, normal, n1, n2):
+        '''
+        Refract (change direction) at a surface with a given normal (normalized) vector.
+        photon.snell_refraction(self, normal, n1, n2)
+        *normal*: 3-vector (normalized) of the normal
+        *n1*, *n2*: indexes of refraction of inside, outside materials respectively.
+        '''
+        nr= n1/float(n2)
+        costh1= self.dir.dot(normal)
+        sin2th1= 1-costh1*costh1
+        sin2th2= nr*nr*sin2th1
+        rcos = msqrt( (1-sin2th2)/(1-sin2th1) ) # costh2/costh1
+        self.dir= nr*self.dir + normal*(self.dir.dot(normal)) * (rcos - nr )
+
+    def smear(self, normal, sigma):
+        '''
+        Randomize the direction on to the surface of a cone, whose axis is the
+        original direction, the half opening angle of the cone is a Gaussian
+        distribution with width sigma (in degrees). The result is confined
+        withing the same side of the interface.
+
+        smear(self, normal, sigma):
+        *normal*: 3-vector (normalized) of the normal
+        *sigma*: diffusion Gaussian sigma
+        '''
+        niter=0
+        while ( True and niter<100 ):
+            niter= niter+1
+            # random phi
+            xphi = nprnd.uniform(-np.pi, np.pi)
+            # Gaussian theta. sigdif in degrees
+            xtheta = nprnd.randn() * mradians(sigma)   # Random angle in radians
+            xsth= msin(xtheta)
+            xcth= mcos(xtheta)
+            # random vector in upper hemisphere, around z-axis
+            vrand = np.array([xsth*mcos(xphi), xsth*msin(xphi), xcth])
+            # rotate the vector so that its z axis points to the original direction
+            vrand = rotate_vector( vrand, self.dir)
+            # If vrand is less than 90 degrees of normal, ok, break
+            if ( vrand.dot(normal) > 1e-6 ):
+                # Consistency check
+                # angle between original direction and smeared direction
+                if abs(mcos(xtheta)-vrand.dot(self.dir)) > 1e-6 :
+                    print xtheta, vrand, self.dir
+                    raise ValueError('Calculation is wrong')
+
+                self.dir = vrand
+                break
+
+    def specular_relection(self, normal):
+        '''
+        Perfect specular reflection at a surface with a given normal (normalized) vector.
+        diffuse_reflection(self, normal, sigma)
+        *normal*: 3-vector (normalized) of the normal
+        '''
+        self.dir = self.dir - 2*self.dir.dot(normal) * normal
+
+
+    def diffuse_reflection(self, normal, sigma):
+        '''
+        Diffused reflection at a surface with a given normal (normalized) vector.
+        diffuse_reflection(self, normal, sigma)
+        *normal*: 3-vector (normalized) of the normal
+        *sigma*: diffusion Gaussian sigma
+        '''
+        # Perfect specular reflection first
+        self.specular_relection(normal)
+        # Smear
+        self.smear(normal, sigma)
+
+    def random_reflection(self, normal):
+        '''
+        Random reflection at a surface with a given normal (normalized) vector.
+        random_reflection(self, normal)
+        '''
+        sign= np.sign( self.dir.dot(normal) )
+        self.dir= random_direction(-sign* normal)
+
+    def random_transmission(self, normal):
+        '''
+        Random transmission at a surface with a given normal (normalized) vector.
+        random_transmission(self, normal)
+        '''
+        sign= np.sign( self.dir.dot(normal) )
+        self.dir= random_direction(sign* normal)
+
+    def transition_at_plane(self, normal, sigdif, pdif, prand, n1, n2):
+        '''
+        Reflected or transmitted at a plane surface
+        transition_at_plane(self, sigdif, pdif, prand)
+        *normal*: normal vector of the surface
+        *sigdif*: diffusion sigma
+        *pdif*: diffusion probability
+        *prand*: random probability
+        *n1*: index of refraction inside
+        *n2*: index of refraction outside
+               ==>> if either n1 or n2 is zero, the interface is not transparent
+        '''
+        self.incident_costh=  normal.dot(self.dir)
+
+        reflected=True
+        if n1>0 and n2>0:
+            # Probability of reflection based on Fresnel equations
+            R= reflectance(n1,n2, self.incident_costh)
+            if nprnd.random_sample() > R:
+                reflected=False
+        else:
+            pass   # Assume reflection
+
+        if reflected:
+            # Check again the surface property
+            rr= nprnd.random_sample()
+            if rr > pdif+prand: # transmitted anyway
+                # random transmission
+                self.random_transmission(normal)
+                reflected= False
+            elif rr > pdif: # random reflection
+                self.random_reflection(normal)
+                reflected= True
+            else:   # diffused reflection
+                self.diffuse_reflection(normal, sigdif)
+                reflected= True
+        else:
+            # according to Snell's law
+            self.snell_refraction(normal, n1, n2)
+            reflected= False
+
+        return reflected
+
+
     def reflect(self, plane, sensors):
         '''
         Change direction as it reflects at a surface and add this position to 
@@ -483,77 +641,51 @@ class Photon:
             if sp.contain( self.x ):
                 theplane= sp
                 break
+        
+        n_in= theplane.idx_refract_in
+        n_out= theplane.idx_refract_out
 
         self.lastplane = theplane
         normal= theplane.normal
         if self.trackvtx:
             self.vertices.append( self.x )
         self.dir = unit_vect(self.dir)
-        costh= normal.dot(self.dir)
 
-        randomed= False
-        diffused= False
-        transmitted= False
-        R= reflectance(theplane.idx_refract_in ,theplane.idx_refract_out, costh)
-        if nprnd.random_sample() > R: # transmitted
-            transmitted= True
+        # At the crystal surface
+        reflected= self.transition_at_plane(normal, theplane.sigdif_crys,
+                                            theplane.pdif_crys, theplane.prand_crys,
+                                            n_in, n_out)
 
-        sigdif= 0.0
-        if not transmitted:  # reflection on crystal surface, only diffused
-            diffused= True
-            sigdif= theplane.sigdif_crys
-        elif theplane.wrapped:  # reflection on the wrapper
-            rn= nprnd.random_sample()
-            if rn >= theplane.pdif_wrap + theplane.prand_wrap: # not reflected
-                self.alive = False
-                self.status = self.absorbed
-            elif rn >= theplane.pdif_wrap:  #  random reflection
-                randomed= True
-                diffused= False
-            else:    # diffused reflection
-                randomed= False
-                diffused= True
-                sigdif= theplane.sigdif_wrap
-        else: # not wrapped, photon lost
+        if reflected: 
+            return theplane
+
+        if not theplane.wrapped:  # Transmitted and no wrapper
             self.alive= False
-            self.deposit_at= self.lastplane
-            self.status= self.transmitted
+            return theplane
 
-        # How is it reflected
-        if self.alive and randomed:   # random reflection
-            xphi = nprnd.uniform(-np.pi, np.pi)
-            xcth = nprnd.uniform(0,0.999)   # cos theta
-            xsth = msqrt(1-xcth**2)
-            # random vector in upper hemisphere
-            vrand = np.array([xsth*mcos(xphi), xsth*msin(xphi), xcth])
-            # rotate the vector so that its z axis points to normal
-            self.dir = rotate_vector( vrand, normal)
+        nbounces=0
+        while ( not reflected and nbounces<5 ):
+            nbounces= nbounces+1
+            # In this loop, photon bounces between the wrapper and the crystal
+            wref= self.transition_at_plane(normal,theplane.sigdif_wrap,
+                                           theplane.pdif_wrap, theplane.prand_wrap,
+                                           0,0)
+            if not wref:  # No reflection from the wrapper
+                self.alive= False
+                return theplane
 
-        if self.alive and diffused: # diffuse
-            # specular reflection
-            spec_dir = self.dir - 2*self.dir.dot(normal) * normal
-            while ( True ):
-                # random phi
-                xphi = nprnd.uniform(-np.pi, np.pi)
-                # Gaussian theta
-                xtheta = nprnd.randn() * sigdif *np.pi/180.0
-                xsth= msin(xtheta)
-                xcth= mcos(xtheta)
-                # random vector in upper hemisphere, around z-axis
-                vrand = np.array([xsth*mcos(xphi), xsth*msin(xphi), xcth])
-                # rotate the vector so that its z axis points to specular reflection
-                vrand = rotate_vector( vrand, spec_dir)
-                # If vrand is less than 90 degrees of normal, ok, break
-                if ( vrand.dot(normal) > 1e-6 ):
-                    self.dir = vrand
-                    break
-        
-        if ( self.alive ):
-            self.n_reflects += 1
-            # to stay away from this plane. FIXME!! This will make the edges leak.
-            self.advance(plane.tolerance)
+            # Reflected from the wrapper
+            # get back in the crystal.
+            # reverse normal and switch indices of reflection
+            cref= self.transition_at_plane(-normal, theplane.sigdif_crys,
+                                           theplane.pdif_crys, theplane.prand_crys,
+                                           n_out, n_in)
+            if not cref: # transmitted back into the crystal
+                reflected= True
 
+        if not reflected: self.alive= False
         return theplane
+
 
     def path_to(self, aplane):
         '''
@@ -626,6 +758,15 @@ class Photon:
 
             # reflect on this plane
             rp= self.reflect(crystal.planes[imin], crystal.sensors)
+            if self.alive:
+                self.n_reflects += 1
+                # to stay away from this plane. 
+                #  FIXME!! This will make the edges leak.
+                self.advance(crystal.planes[imin].tolerance)
+            else:
+                self.deposit_at= self.lastplane
+                self.status= self.transmitted 
+
 
         return rp
 
@@ -633,7 +774,7 @@ class Photon:
 
 
 
-def run_exp(crystal, zpoints, dz, dr, nperz, mfp=1000, verbose=False):
+def run_exp(crystal, zpoints, dz, dr, nperz, mfp, verbose=False):
     '''
     Run experiments. Return photon detection efficiency (and error) for each z points. 
     Photons are generated in a region specified by zpoints, dz (range in z (+-dz)) and dr (a circle with radius dr in x-y plane). 
@@ -653,7 +794,7 @@ def run_exp(crystal, zpoints, dz, dr, nperz, mfp=1000, verbose=False):
             xp,rp= generate_p6(zp, dz, dr)
             photon= Photon(xp,rp, mfp= mfp)
             plane= photon.propagate(crystal)
-            if photon.status != 'transmitted': continue
+            if photon.status != photon.transmitted: continue
             if photon.lastplane is None: continue
             if photon.lastplane.sensitive:
                 ndet= ndet+1
@@ -667,9 +808,13 @@ def run_exp(crystal, zpoints, dz, dr, nperz, mfp=1000, verbose=False):
     return np.array(effs), np.array(errs)
 
 
-def draw_one_crystal(ax, crystal, photon=None, elev=20, azim=40, xlim=(-3,3), ylim=(-3,3)):
+def draw_one_crystal(ax, crystal, photon=None, elev=20, azim=40, xlim=(-3,3), ylim=(-3,3), zlim=(-3,3)):
     '''
-    Draw one crystal in 3D
+    Draw one crystal in 3D.
+    draw_one_crystal(ax, crystal, photon=None, elev=20, azim=40, xlim=(-3,3), ylim=(-3,3)):
+    *ax*: An axis instance with projection='3d'. E.g., fig.add_subplot(111,projection='3d')
+    *crystal*: An instance of Crystal class
+    *photon*: An instance of Photon class to be drawn.
     '''
     ax.view_init(elev= elev, azim=azim)
     crystal.draw(ax, photon)

@@ -11,6 +11,9 @@ from math import cos as mcos
 from math import sqrt as msqrt
 from math import exp as mexp
 from math import radians as mradians
+from scipy.constants import c as clight
+clightcm = clight * 100
+clightcmns = clightcm * 1e-9  ## speed of light in cm/ns
 npsqrt= np.sqrt
 npexp= np.exp
 npsin= np.sin
@@ -210,8 +213,8 @@ def generate_p6(np.ndarray[DTYPE_t, ndim=1] center, DTYPE_t dz, DTYPE_t dr):
     z= center[2]+ nprnd.uniform(-1,1)* dz
     r= np.sqrt(nprnd.uniform(0,1)) * dr
     phi= nprnd.uniform(0, 2*np.pi)
-    x= r*mcos(phi)
-    y= r*msin(phi)
+    x= center[0] + r*mcos(phi)
+    y= center[1] + r*msin(phi)
     #
     phi= nprnd.uniform(0, 2*np.pi)
     cth= nprnd.uniform(-1,1)
@@ -448,19 +451,24 @@ class Crystal:
 class Photon:
     '''
     A class describing a photon
+    Unit: cm and ps
     x : Current position (array of three floats)
-    p : Current direction (array of three floats, norm=1
+    dir : Current direction (array of three floats, norm=1
+    t0 : time of creation
+    t : current time
     wavelength : wavelength
     mfp : Mean free path
     '''
-    def __init__(self, x, dir, wavelength=None, mfp=1e9, trackvtx=False):
+    def __init__(self, x, dir, t=0, wavelength=None, mfp=1e9,\
+                 trackvtx=False):
         self.x = np.array(x, dtype='Float64')
         self.dir = unit_vect(np.array(dir))
         self.startx = x
+        self.t0 = t
+        self.t = t
         if ( wavelength == None ): self.wavelength = 400e-9   # in meter
         else: self.wavelength = wavelength
         self.alive = True
-        self.detected = False
         self.pathlength = 0.0
         self.n_reflects = 0
         self.incident_costh= -1.0
@@ -478,7 +486,7 @@ class Photon:
         self.noplane= 5
         self.lastplane= None
 
-    def advance(self, d):
+    def advance(self, d, idx_refract=1):
         '''
         Advance a distance d.
         '''
@@ -490,6 +498,7 @@ class Photon:
         if ( self.alive ):
             self.x = self.path(d)
             self.pathlength += d
+            self.t += d/clightcmns * idx_refract
 
     def path(self, d):
         '''
@@ -753,7 +762,7 @@ class Photon:
                 print 'path to next plane is', dmin
                 crystal.planes[imin].print_properties()
             # advance photon
-            self.advance(dmin)
+            self.advance(dmin, crystal.planes[imin].idx_refract_in)
             if ( not self.alive ): return None
 
             # reflect on this plane
@@ -770,9 +779,16 @@ class Photon:
 
         return rp
 
-
-
-
+    def print_properties(self):
+        '''
+        Print out the property of this photon
+        '''
+        print 'Photon:'
+        print '  start t=', self.t0, '  start x= ', self.startx
+        print '  end t=', self.t, '  end x= ', self.x
+        print '  status=', self.status_names[self.status]
+        print '  pathlen=', self.pathlength
+        print '  n_reflects=', self.n_reflects
 
 def run_exp(crystal, zpoints, dz, dr, nperz, mfp, verbose=False):
     '''

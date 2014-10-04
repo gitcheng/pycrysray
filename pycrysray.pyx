@@ -451,7 +451,6 @@ class Crystal:
 class Photon:
     '''
     A class describing a photon
-    Unit: cm and ps
     x : Current position (array of three floats)
     dir : Current direction (array of three floats, norm=1
     t0 : time of creation

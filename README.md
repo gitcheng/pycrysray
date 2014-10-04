@@ -1,4 +1,5 @@
-=== Project pycrysray: ===
+Project pycrysray
+=================
 
 Optical photon ray tracing program for crystal studies. 
 

@@ -11,7 +11,8 @@ from math import cos as mcos
 from math import sqrt as msqrt
 from math import exp as mexp
 from math import radians as mradians
-from scipy.constants import c as clight
+##from scipy.constants import c as clight
+clight = 299792458.0
 clightcm = clight * 100
 clightcmns = clightcm * 1e-9  ## speed of light in cm/ns
 npsqrt= np.sqrt

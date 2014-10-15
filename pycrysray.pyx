@@ -3,7 +3,6 @@ import numpy as np
 cimport numpy as np
 nprnd= np.random
 from cpython cimport bool
-from matplotlib import pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import sys
 from math import sin as msin
@@ -419,12 +418,10 @@ class Crystal:
 
     __set_plane_normal = set_plane_normal
 
-    def draw(self, ax=None, photon=None):
+    def draw(self, ax, photon=None):
         '''
         Draw the crystal in 3D axis
         '''
-        if ax is None:
-            ax= plt.gca()
         for p in self.allplanes:
             pts= np.concatenate((p.corners,[p.corners[0]]))
             color='b'

@@ -55,7 +55,7 @@ def sine_angle(np.ndarray[DTYPE_t, ndim=1] v1, np.ndarray[DTYPE_t, ndim=1] v2, n
     cdef np.ndarray[DTYPE_t, ndim=1] a= v1
     cdef np.ndarray[DTYPE_t, ndim=1] b= v2
 
-    if ( vtx != None ):
+    if ( vtx is not None ):
         a= a-vtx
         b= b-vtx
     cdef np.ndarray[DTYPE_t, ndim=1] n= np.cross(a,b) / ( vect_norm(a) * vect_norm(b) )
@@ -463,7 +463,7 @@ class Photon:
         self.startx = x
         self.t0 = t
         self.t = t
-        if ( wavelength == None ): self.wavelength = 400e-9   # in meter
+        if ( wavelength is None ): self.wavelength = 400e-9   # in meter
         else: self.wavelength = wavelength
         self.alive = True
         self.pathlength = 0.0
@@ -750,7 +750,7 @@ class Photon:
 
             # find the next plane
             imin,dmin= self.nearest_plane(crystal.planes)
-            if ( imin == None ):  # did not find any plane
+            if ( imin is None ):  # did not find any plane
                 self.alive = False
                 self.status= self.noplane
                 if ( verbose ): print 'Cannot find next plane'

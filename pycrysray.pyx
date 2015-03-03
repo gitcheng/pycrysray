@@ -50,6 +50,9 @@ def cross_prod(np.ndarray[DTYPE_t] x, np.ndarray[DTYPE_t] y):
     z2 = x[0]*y[1] - x[1]*y[0]
     return np.array([z0, z1, z2], dtype= DTYPE)
 
+def dot_prod(np.ndarray[DTYPE_t] x, np.ndarray[DTYPE_t] y):
+    return x[0]*y[0]+x[1]*y[1]+x[2]*y[2]
+
 def distance(np.ndarray[DTYPE_t] x1, np.ndarray[DTYPE_t] x2, int n=3):
     '''
     Return the distance between two points |x1-x2|
@@ -67,7 +70,7 @@ def sine_angle(np.ndarray[DTYPE_t] v1, np.ndarray[DTYPE_t] v2, np.ndarray[DTYPE_
     if ( vtx is not None ):
         a= a-vtx
         b= b-vtx
-    cdef np.ndarray[DTYPE_t] n= np.cross(a,b) / ( vect_norm(a) * vect_norm(b) )
+    cdef np.ndarray[DTYPE_t] n= cross_prod(a,b) / ( vect_norm(a) * vect_norm(b) )
     return vect_norm(n)
 
 @cython.boundscheck(False)
@@ -276,8 +279,8 @@ class Plane:
             raise TypeError('corners in %s(corners) must be of shape (n,3) with n>=3. But it is (%d,%d)' % ( self.__class__.__name__, shape[0], shape[1])) 
 
         # Use the two edges at corners[0] to define its normal vector
-        self.normal= unit_vect( np.cross(self.corners[-1]-self.corners[0],
-                                         self.corners[1]-self.corners[0]) )
+        self.normal= unit_vect( cross_prod(self.corners[-1]-self.corners[0],
+                                           self.corners[1]-self.corners[0]) )
         # Center of gravity
         self.cog = np.average( self.corners, axis=0 )
         self.tolerance= 1e-7
@@ -297,7 +300,7 @@ class Plane:
         self.idx_refract_out = idx_refract_out
         # base vectors
         self.u = unit_vect( self.corners[0]- self.cog )
-        self.v = np.cross( self.normal, self.u )
+        self.v = cross_prod( self.normal, self.u )
         #
         self.sanity_check()
 
@@ -320,8 +323,8 @@ class Plane:
         ## Check all its interior angles are less than 180, or cross product
         ## does not flip direction
         for i in range( shape[0] ):
-            n = np.cross( self.corners[i-2]-self.corners[i-1], self.corners[i]-self.corners[i-1] )
-            if n.dot( self.normal ) < 0 :
+            n = cross_prod( self.corners[i-2]-self.corners[i-1], self.corners[i]-self.corners[i-1] )
+            if dot_prod(n, self.normal ) < 0 :
                 print self.corners[i-1], self.corners[i], self.corners[i+1]
                 raise TypeError('These corners form an angle that is greater'
                                 ' than 180 degrees. Only convex polygons are'
@@ -329,7 +332,7 @@ class Plane:
 
         ## Check corners are on the same plane
         for c in self.corners:
-            if abs( (c-self.corners[0]).dot( self.normal ) ) > self.tolerance:
+            if abs(dot_prod(c-self.corners[0], self.normal)) > self.tolerance:
                 print c
                 raise TypeError('The corner shown above is not on the same plane')
         
@@ -369,7 +372,7 @@ class Plane:
         '''
         True if x is on the 2-D plane (infinite)
         '''
-        if ( abs( (x-self.corners[0]).dot( self.normal ) ) > self.tolerance ):
+        if (abs(dot_prod(x-self.corners[0], self.normal ) ) > self.tolerance ):
             return False
         else:
             return True
@@ -382,7 +385,7 @@ class Plane:
         nrm = cross_prod( self.corners[-1]-x, self.corners[0]-x )
         for c1,c2 in zip(self.corners[:-1], self.corners[1:]):
             nn = cross_prod( c1-x, c2-x )
-            if ( nrm.dot( nn ) < 0 ):
+            if (dot_prod(nrm, nn ) < 0 ):
                 return False
         return True
 
@@ -390,7 +393,7 @@ class Plane:
         '''
         Return True if the point is on the same side as the normal.
         '''
-        return self.normal.dot(x-self.cog)>0
+        return dot_prod(self.normal, x-self.cog)>0
 
 
 ###################################################################
@@ -422,7 +425,7 @@ class Crystal:
         '''
         for p in self.allplanes:
             vc= self.cog - p.cog
-            if vc.dot(p.normal) < 0: 
+            if dot_prod(vc, p.normal) < 0: 
                 p.normal= -p.normal
 
     __set_plane_normal = set_plane_normal
@@ -522,11 +525,13 @@ class Photon:
         *n1*, *n2*: indexes of refraction of inside, outside materials respectively.
         '''
         nr= n1/float(n2)
-        costh1= self.dir.dot(normal)
+        #costh1= self.dir.dot(normal)
+        costh1= dot_prod(self.dir, normal)
         sin2th1= 1-costh1*costh1
         sin2th2= nr*nr*sin2th1
         rcos = msqrt( (1-sin2th2)/(1-sin2th1) ) # costh2/costh1
-        self.dir= nr*self.dir + normal*(self.dir.dot(normal)) * (rcos - nr )
+        #self.dir= nr*self.dir + normal*(self.dir.dot(normal)) * (rcos - nr )
+        self.dir= nr*self.dir + normal*(dot_prod(self.dir, normal)) * (rcos - nr )
 
     def smear(self, normal, sigma):
         '''
@@ -553,10 +558,11 @@ class Photon:
             # rotate the vector so that its z axis points to the original direction
             vrand = rotate_vector( vrand, self.dir)
             # If vrand is less than 90 degrees of normal, ok, break
-            if ( vrand.dot(normal) > 1e-6 ):
+            #if ( vrand.dot(normal) > 1e-6 ):
+            if ( dot_prod(vrand, normal) > 1e-6 ):
                 # Consistency check
                 # angle between original direction and smeared direction
-                if abs(mcos(xtheta)-vrand.dot(self.dir)) > 1e-6 :
+                if abs(mcos(xtheta)- dot_prod(vrand, self.dir)) > 1e-6 :
                     print xtheta, vrand, self.dir
                     raise ValueError('Calculation is wrong')
 
@@ -569,7 +575,7 @@ class Photon:
         diffuse_reflection(self, normal, sigma)
         *normal*: 3-vector (normalized) of the normal
         '''
-        self.dir = self.dir - 2*self.dir.dot(normal) * normal
+        self.dir = self.dir - 2*dot_prod(self.dir, normal) * normal
 
 
     def diffuse_reflection(self, normal, sigma):
@@ -589,7 +595,7 @@ class Photon:
         Random reflection at a surface with a given normal (normalized) vector.
         random_reflection(self, normal)
         '''
-        sign= np.sign( self.dir.dot(normal) )
+        sign= np.sign(dot_prod(self.dir, normal) )
         self.dir= random_direction(-sign* normal)
 
     def random_transmission(self, normal):
@@ -597,7 +603,7 @@ class Photon:
         Random transmission at a surface with a given normal (normalized) vector.
         random_transmission(self, normal)
         '''
-        sign= np.sign( self.dir.dot(normal) )
+        sign= np.sign(dot_prod(self.dir, normal))
         self.dir= random_direction(sign* normal)
 
     def transition_at_plane(self, normal, sigdif, pdif, prand, n1, n2):
@@ -612,7 +618,8 @@ class Photon:
         *n2*: index of refraction outside
                ==>> if either n1 or n2 is zero, the interface is not transparent
         '''
-        self.incident_costh=  normal.dot(self.dir)
+        self.incident_costh=  dot_prod(normal, self.dir)
+        #self.incident_costh=  normal.dot(self.dir)
 
         reflected=True
         if n1>0 and n2>0:
@@ -708,11 +715,13 @@ class Photon:
         '''
         Pathlength (signed) to a plane.
         '''
-        dom = self.dir.dot(aplane.normal)
+        #dom = self.dir.dot(aplane.normal)
+        dom = dot_prod(self.dir, aplane.normal)
         if abs(dom)<1e-6:
             return 1e6
         else:
-            return aplane.normal.dot(aplane.corners[0] - self.x) / dom
+            return dot_prod(aplane.normal, aplane.corners[0] - self.x) / dom
+            #return aplane.normal.dot(aplane.corners[0] - self.x) / dom
 
     def nearest_plane(self, plist):
         '''

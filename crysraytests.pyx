@@ -69,7 +69,7 @@ def check_plane():
     print '  Point', pt22, tpl.normal_side(pt22)
 
     print '\n(5): Some speed tests'
-    count = 10000
+    count = 40000
     start = time.clock()
     for i in xrange(count): tpl.on_plane(pt3)
     end = time.clock()
@@ -86,7 +86,7 @@ def check_plane():
     print '\n(6): Random points on the surface, must all be contained'
     p = np.zeros(3, dtype=DTYPE)
     ok = True
-    count = 10000
+    count = 40000
     start = time.clock()
     for i in xrange(count):
         p[0] = rnd.uniform() * 1.0
@@ -96,7 +96,7 @@ def check_plane():
             ok = False
     end = time.clock()
     print 'All %d points are ok:' %(count), ok
-    print 'time:  %.3f msec' % ((end-start) *1e3)
+    print 'time:  %.3f usec per point' % ((end-start) *1e6/count)
 
 
 def check_crystal():
@@ -138,6 +138,16 @@ def check_crystal():
     print 'The fraction should be compared to ',
     print '(sqrt(3)/2 * 3^2*10) / (4*4*12) = %.2f%%'%(rv)
 
+    print '\n(3) Time test: Crystal.contain(x)'
+    start = time.clock()
+    count = 10000
+    x = np.array([0,0,3], dtype=DTYPE)
+    for i in xrange(count):
+        cryhex.contain(x)
+    end = time.clock()
+    print 'time:  %.3f usec per check' % ((end-start) *1e6/count)
+
+
 def check_photon():
     '''
     Test some photon properties
@@ -166,12 +176,12 @@ def check_photon():
     photon2.print_properties()
     print 'vertices:', photon2.vertices
 
-    print '\n(3) timing test using a hexagonal crystal with two sensors'
+    print '\n(3) time test using a hexagonal crystal with two sensors'
     count = 1000
     ndet = 0
     tsum = 0
     start = time.clock()
-    for i in range(count):
+    for i in xrange(count):
         x, d = generate_p6(np.array([0,0,9], dtype=DTYPE), 0.1, 0.1)
         photon3 = Photon(x, d, t=0, trackvtx= False, mfp = 50)
         photon3.propagate(cryhex)
@@ -183,6 +193,41 @@ def check_photon():
     print ' average time to reach a sensor = %.2f ns' % (tsum/ndet)
     end = time.clock()
     print 'cpu time:  %.3f msec per photon' % ((end-start)/count *1e3)
+
+    print '\n(4) time test: Photon.nearest_plane'
+    count = 10000
+    x = np.array([0.5, -0.5, 4], dtype=DTYPE)
+    d = np.array([1, 1, 0.0], dtype=DTYPE)
+    photon4 = Photon(x, d, t=0, trackvtx= True, mfp = 2.0)
+    start = time.clock()
+    for i in xrange(count):
+        photon4.nearest_plane(cryhex.planes)
+    end = time.clock()
+    print 'cpu time:  %.3f usec per check' % ((end-start)/count *1e6)
+
+    print '\n(4) time test: Photon.path_to'
+    count = 10000
+    x = np.array([0, 0, 3], dtype=DTYPE)
+    d = np.array([0.1, 0.1, -1.0], dtype=DTYPE)
+    photon5 = Photon(x, d, t=0, trackvtx= True, mfp = 2.0)
+    start = time.clock()
+    print cryhex.planes[0].corners
+    print photon5.path_to(cryhex.planes[0])
+    for i in xrange(count):
+        photon5.path_to(cryhex.planes[0])
+    end = time.clock()
+    print 'cpu time:  %.3f usec per check' % ((end-start)/count *1e6)
+
+    print '\n(5) time test: Photon creation'
+    count = 10000
+    x = np.array([0, 0, 3], dtype=DTYPE)
+    d = np.array([0.1, 0.1, -1.0], dtype=DTYPE)
+    start = time.clock()
+    for i in xrange(count):
+        photon5 = Photon(x, d, t=0, trackvtx= True, mfp = 2.0)
+    end = time.clock()
+    print 'cpu time:  %.3f usec per photon' % ((end-start)/count *1e6)
+
 
 
 def main():

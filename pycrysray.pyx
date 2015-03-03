@@ -763,7 +763,7 @@ class Photon:
 
             # find the next plane
             imin,dmin= self.nearest_plane(crystal.planes)
-            if ( imin == None ):  # did not find any plane
+            if ( imin is None ):  # did not find any plane
                 self.alive = False
                 self.status= self.noplane
                 if ( verbose ): print 'Cannot find next plane'

@@ -23,15 +23,26 @@ is killed either at the surface (reflectivity) or after certain path length
 
 To build:
 
+<code>
 python setup.py install
+</code>
 
 It is installed in the usual place of your python packages. You may need 
 root previlege.
 
+or
+
+<code>
+python setup.py build_ext --inplace
+</code>
+
+to build the module in the same directory as the source.
+
 Import everything in your application python script
 
-  from pycrysray import *
-
+<code>
+from pycrysray import *
+</code>
 
 
 Geometry

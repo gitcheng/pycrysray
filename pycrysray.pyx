@@ -25,44 +25,53 @@ ctypedef np.float64_t DTYPE_t
 ## Functions ===========================================
 @cython.boundscheck(False)
 @cython.wraparound(False)
-def vect_norm(DTYPE_t[::1] vec):
+def vect_norm(np.ndarray[DTYPE_t] vec):
     '''
     Return the norm of a vector |v|
     '''
-    return msqrt( vec[0]*vec[0]+vec[1]*vec[1]+vec[2]*vec[2])
-    #cdef DTYPE_t norm= 0.0
-    #for v in vec:
-    #    norm+= v*v
-    #return msqrt(norm)
+    if vec.shape[0] != 3:
+        raise ValueError('Wrong length, must be 3')
+    cdef DTYPE_t value
+    value = vec[0]*vec[0]+vec[1]*vec[1]+vec[2]*vec[2]
+    return msqrt(value)
 
-def unit_vect(np.ndarray[DTYPE_t, ndim=1] v):
+def unit_vect(np.ndarray[DTYPE_t] v):
     '''
     Return the unit vector of direction v.
     '''
     return v*(1.0/vect_norm(v))
 
-def distance(np.ndarray[DTYPE_t, ndim=1] x1, np.ndarray[DTYPE_t, ndim=1] x2, int n=3):
+def cross_prod(np.ndarray[DTYPE_t] x, np.ndarray[DTYPE_t] y):
+    '''
+    Cross product in 3D
+    '''
+    z0 = x[1]*y[2] - x[2]*y[1]
+    z1 = x[2]*y[0] - x[0]*y[2]
+    z2 = x[0]*y[1] - x[1]*y[0]
+    return np.array([z0, z1, z2], dtype= DTYPE)
+
+def distance(np.ndarray[DTYPE_t] x1, np.ndarray[DTYPE_t] x2, int n=3):
     '''
     Return the distance between two points |x1-x2|
     '''
     return vect_norm( x2-x1 )
 
-def sine_angle(np.ndarray[DTYPE_t, ndim=1] v1, np.ndarray[DTYPE_t, ndim=1] v2, np.ndarray[DTYPE_t, ndim=1] vtx=None):
+def sine_angle(np.ndarray[DTYPE_t] v1, np.ndarray[DTYPE_t] v2, np.ndarray[DTYPE_t] vtx=None):
     '''
     sine of the angle formed by either three points v1, v2, and vtx with vtx as
     the vertex, or angle between two vectors v1 and v2 if vtx=None.
     '''
-    cdef np.ndarray[DTYPE_t, ndim=1] a= v1
-    cdef np.ndarray[DTYPE_t, ndim=1] b= v2
+    cdef np.ndarray[DTYPE_t] a= v1
+    cdef np.ndarray[DTYPE_t] b= v2
 
-    if ( vtx != None ):
+    if ( vtx is not None ):
         a= a-vtx
         b= b-vtx
-    cdef np.ndarray[DTYPE_t, ndim=1] n= np.cross(a,b) / ( vect_norm(a) * vect_norm(b) )
+    cdef np.ndarray[DTYPE_t] n= np.cross(a,b) / ( vect_norm(a) * vect_norm(b) )
     return vect_norm(n)
 
 @cython.boundscheck(False)
-def rotate_vector(np.ndarray[DTYPE_t, ndim=1] v, np.ndarray[DTYPE_t, ndim=1] zhat):
+def rotate_vector(np.ndarray[DTYPE_t] v, np.ndarray[DTYPE_t] zhat):
     '''
     Rotate the vector v so that the z axis of its coordinate points to zhat.
     '''
@@ -201,7 +210,7 @@ def transmittance(DTYPE_t n1, DTYPE_t n2, DTYPE_t cos_theta_i):
     return 1.0- reflectance(n1, n2, cos_theta_i)
 
 # Generate random directions and random positions
-def generate_p6(np.ndarray[DTYPE_t, ndim=1] center, DTYPE_t dz, DTYPE_t dr):
+def generate_p6(np.ndarray[DTYPE_t] center, DTYPE_t dz, DTYPE_t dr):
     '''
     Generate random directions and random positions
     Return two arrays (3-vector), first the position; second the direction.
@@ -370,9 +379,9 @@ class Plane:
         Return True if the position x is inside the 2D polygon
         '''
         if ( not self.on_plane(x) ): return False
-        nrm = np.cross( self.corners[-1]-x, self.corners[0]-x )
+        nrm = cross_prod( self.corners[-1]-x, self.corners[0]-x )
         for c1,c2 in zip(self.corners[:-1], self.corners[1:]):
-            nn = np.cross( c1-x, c2-x )
+            nn = cross_prod( c1-x, c2-x )
             if ( nrm.dot( nn ) < 0 ):
                 return False
         return True
@@ -418,19 +427,21 @@ class Crystal:
 
     __set_plane_normal = set_plane_normal
 
-    def draw(self, ax, photon=None):
+    def draw(self, ax, photon=None, crystal_color='b', sensor_color='orange',\
+             photon_color='g'):
         '''
         Draw the crystal in 3D axis
         '''
         for p in self.allplanes:
             pts= np.concatenate((p.corners,[p.corners[0]]))
-            color='b'
-            if p.sensitive: color='orange'
+            color= crystal_color
+            if p.sensitive: color= sensor_color
             ax.plot(pts[:,0],pts[:,1],pts[:,2], color=color)
 
         if photon is not None:
             pts= np.array(photon.vertices)
-            ax.plot(pts[:,0],pts[:,1],pts[:,2], 'g-', ms=2, mec='g', alpha=0.5)
+            ax.plot(pts[:,0],pts[:,1],pts[:,2], photon_color+'-', ms=2, 
+                    mec= photon_color, alpha=0.5)
             px= photon.startx
             ax.plot([px[0]],[px[1]],[px[2]], 'ro')
             px= photon.x
@@ -463,7 +474,7 @@ class Photon:
         self.startx = x
         self.t0 = t
         self.t = t
-        if ( wavelength == None ): self.wavelength = 400e-9   # in meter
+        if ( wavelength is None ): self.wavelength = 400e-9   # in meter
         else: self.wavelength = wavelength
         self.alive = True
         self.pathlength = 0.0
@@ -723,6 +734,8 @@ class Photon:
     def propagate(self, crystal, verbose=False):
         '''
         Propagating this photon.
+        propagate(self, crystal, verbose=False)
+        *crystal*: crystal in which this photon is in.
         Return the plane this photon dies on.
         '''
         rp= None
@@ -819,21 +832,3 @@ def run_exp(crystal, zpoints, dz, dr, nperz, mfp, verbose=False):
     if verbose:
         print 
     return np.array(effs), np.array(errs)
-
-
-def draw_one_crystal(ax, crystal, photon=None, elev=20, azim=40, xlim=(-3,3), ylim=(-3,3), zlim=(-3,3)):
-    '''
-    Draw one crystal in 3D.
-    draw_one_crystal(ax, crystal, photon=None, elev=20, azim=40, xlim=(-3,3), ylim=(-3,3)):
-    *ax*: An axis instance with projection='3d'. E.g., fig.add_subplot(111,projection='3d')
-    *crystal*: An instance of Crystal class
-    *photon*: An instance of Photon class to be drawn.
-    '''
-    ax.view_init(elev= elev, azim=azim)
-    crystal.draw(ax, photon)
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('z')
-    ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
-

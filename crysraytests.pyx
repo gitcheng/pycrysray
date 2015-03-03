@@ -25,6 +25,16 @@ sengeom2 = rectangle(center= [0, -0.7, 0], xlen= 0.9, ylen= 0.9, **sensor)
 cryrect = Crystal('cryrect', rectgeom + [sengeom1] + [sengeom2])
 cryhex = Crystal('cryhex', hexgeom + [sengeom1] + [sengeom2])
 
+# Create a smooth surface without wrapping
+surf0 = dict(sigdif_crys=0.0, pdif_crys=1.0, prand_crys=0.0,
+            idx_refract_in = 2.0, idx_refract_out = 1.0, 
+             sensitive=False, wrapped=False)
+# Create a cubic crystal with surf0
+cubegeom = rect_prism(center= [0,0,0], length= 2, xlen= 2, ylen= 2,
+                      **surf0)
+crycube = Crystal('crycube', cubegeom)
+
+
 def check_plane():
     '''
     Perform some checks on a Plane object
@@ -128,17 +138,66 @@ def check_crystal():
     print 'The fraction should be compared to ',
     print '(sqrt(3)/2 * 3^2*10) / (4*4*12) = %.2f%%'%(rv)
 
+def check_photon():
+    '''
+    Test some photon properties
+    '''
+    print 'Surface of the crystal for test (1) and (2)'
+    crycube.planes[0].print_properties()
+
+    print '(1), small incident angle'
+    x = np.array([0, 0, 0], dtype=DTYPE)
+    d = np.array([1, 0.2, 0.3], dtype=DTYPE)
+    photon1 = Photon(x, d, t=0, trackvtx= True, mfp = 2.0)
+    print 'Before propagation'
+    photon1.print_properties()
+    photon1.propagate(crycube)
+    print 'After propagation'
+    photon1.print_properties()
+
+    print '(2), larger incident angle'
+    x = np.array([0.5, -0.5, 0], dtype=DTYPE)
+    d = np.array([1, 1, 0.0], dtype=DTYPE)
+    photon2 = Photon(x, d, t=0, trackvtx= True, mfp = 2.0)
+    print 'Before propagation'
+    photon2.print_properties()
+    photon2.propagate(crycube)
+    print 'After propagation'
+    photon2.print_properties()
+    print 'vertices:', photon2.vertices
+
+    print '\n(3) timing test using a hexagonal crystal with two sensors'
+    count = 1000
+    ndet = 0
+    tsum = 0
+    start = time.clock()
+    for i in range(count):
+        x, d = generate_p6(np.array([0,0,9], dtype=DTYPE), 0.1, 0.1)
+        photon3 = Photon(x, d, t=0, trackvtx= False, mfp = 50)
+        photon3.propagate(cryhex)
+        if photon3.status == photon3.transmitted and \
+           photon3.lastplane.sensitive :
+            ndet += 1
+            tsum += photon3.t - photon3.t0
+    print 'photon collection %d/%d = %.2f%%' % (ndet,count,ndet/float(count)*100)
+    print ' average time to reach a sensor = %.2f ns' % (tsum/ndet)
+    end = time.clock()
+    print 'cpu time:  %.3f msec per photon' % ((end-start)/count *1e3)
+
 
 def main():
     import sys
     if not len(sys.argv) == 2:
         raise ValueError('Exactly one argument is needed')
 
+    rnd.seed(0)
     arg = sys.argv[1]
     if arg == 'check_plane':
         check_plane()
     elif arg == 'check_crystal':
         check_crystal()
+    elif arg == 'check_photon':
+        check_photon()
 
 if __name__ == '__main__':
     main()

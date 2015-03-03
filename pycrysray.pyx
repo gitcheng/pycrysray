@@ -19,7 +19,7 @@ npexp= np.exp
 npsin= np.sin
 npcos= np.cos
 
-DTYPE = np.float
+DTYPE = np.float64
 ctypedef np.float64_t DTYPE_t
 
 ## Functions ===========================================
@@ -463,14 +463,14 @@ class Photon:
     x : Current position (array of three floats)
     dir : Current direction (array of three floats, norm=1
     t0 : time of creation
-    t : current time
+    t : current time in nanoseconds
     wavelength : wavelength
     mfp : Mean free path
     '''
     def __init__(self, x, dir, t=0, wavelength=None, mfp=1e9,\
                  trackvtx=False):
-        self.x = np.array(x, dtype='Float64')
-        self.dir = unit_vect(np.array(dir))
+        self.x = np.array(x, dtype=DTYPE)
+        self.dir = unit_vect(np.array(dir, dtype=DTYPE))
         self.startx = x
         self.t0 = t
         self.t = t
@@ -796,6 +796,7 @@ class Photon:
         print 'Photon:'
         print '  start t=', self.t0, '  start x= ', self.startx
         print '  end t=', self.t, '  end x= ', self.x
+        print '  direction = ', self.dir
         print '  status=', self.status_names[self.status]
         print '  pathlen=', self.pathlength
         print '  n_reflects=', self.n_reflects

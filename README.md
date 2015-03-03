@@ -45,6 +45,25 @@ from pycrysray import *
 </code>
 
 
+Test
+--------
+
+This package provides test python script <code>crysraytests.pyx</code>.
+It currently contains three tests. One can run the tests in python prompt
+<code>
+import crysraytests
+crysraytests.check_plane()
+crysraytests.check_crystal()
+crysraytests.check_photon()
+</code>
+or as a python script
+<code>
+python crysraytests.pyx check_plane
+python crysraytests.pyx check_crystal
+python crysraytests.pyx check_photon
+</code>
+
+
 Geometry
 --------
 
